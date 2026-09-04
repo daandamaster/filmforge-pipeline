@@ -1,0 +1,8 @@
+{
+  "name": "FilmForge Pipeline",
+  "short_name": "FilmForge",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030310",
+  "theme_color": "#030310"
+}
