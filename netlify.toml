@@ -1,6 +1,5 @@
 [build]
   publish = "."
-  command = "echo static hangar"
 
 [[headers]]
   for = "/*"
