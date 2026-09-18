@@ -12,6 +12,8 @@ const STAGE_NL = {
 const WORKCUT = "https://media.githubusercontent.com/media/daandamaster/daniel-volt/main/DANIEL_VOLT.mp4";
 const POSTER = "https://raw.githubusercontent.com/daandamaster/daniel-volt/main/poster.jpg";
 const PROOF = "https://github.com/daandamaster/daniel-volt";
+const GEMINI_API = "/api/gemini";
+const HEALTH_API = "/api/health";
 
 const SHOTS = [
   { n:"01", title:"palm / volt", optics:"2.39:1 · 35mm 500T · tungsten · palm open, volt-gloed in de lijnen · slow push-in 15s", seed:"lock-still" },
@@ -43,7 +45,8 @@ const state = {
   stageI: 0,
   log: [],
   running: false,
-  timer: null
+  timer: null,
+  gemini: null
 };
 
 function $(sel){ return document.querySelector(sel); }
@@ -56,6 +59,29 @@ function log(line){
   state.log.push("["+t+"] "+line);
   const el = $("#runlog");
   if(el){ el.textContent = state.log.join("\n"); el.scrollTop = el.scrollHeight; }
+}
+
+async function pingHealth(){
+  try {
+    const r = await fetch(HEALTH_API, { cache: "no-store" });
+    const j = await r.json();
+    state.gemini = !!j.gemini;
+    log(j.gemini ? "Function /api/health · Gemini env locked" : "Function /api/health · GEMINI_API_KEY ontbreekt");
+  } catch (e) {
+    state.gemini = false;
+    log("Function /api/health offline — import + deploy op Netlify");
+  }
+}
+
+async function callGemini(prompt){
+  const r = await fetch(GEMINI_API, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt: prompt, model: "gemini-flash-latest" })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ("Gemini " + r.status));
+  return j;
 }
 
 function chrome(){
@@ -130,6 +156,14 @@ function consoleView(){
       <button class="btn gold" id="runbtn">${state.running?"Opname loopt…":"▸ Run pipeline"}</button>
       <button class="btn ghost" id="cutbtn">Cut</button>
     </div>
+    <form class="gate" id="gemini-form" style="margin-bottom:16px">
+      <h2>GEMINI SLATE</h2>
+      <p class="lede">POST /api/gemini · key blijft in Netlify env</p>
+      <label>Prompt</label>
+      <textarea name="prompt" maxlength="4000">One-line slate for DANIEL / VOLT. Gelderland rain. Charcoal coat. Dutch. Max 25 words.</textarea>
+      <p class="err" id="gemerr"></p>
+      <button class="btn gold" type="submit" id="geminibtn">Call Gemini</button>
+    </form>
     <pre class="log" id="runlog">${state.log.join("\n")||"Wachten op Run."}</pre>
   </main>`;
 }
@@ -190,6 +224,25 @@ function bind(){
   });
   $("#runbtn")?.addEventListener("click", ()=>{ state.view="console"; startRun(); render(); });
   $("#cutbtn")?.addEventListener("click", cut);
+  const gf = $("#gemini-form");
+  if(gf) gf.addEventListener("submit", async e=>{
+    e.preventDefault();
+    const prompt = String(new FormData(gf).get("prompt")||"").trim();
+    const err = $("#gemerr");
+    const btn = $("#geminibtn");
+    if(!prompt){ if(err) err.textContent = "Prompt leeg."; return; }
+    if(btn) btn.disabled = true;
+    log("GEMINI · POST /api/gemini");
+    try {
+      const j = await callGemini(prompt);
+      log("GEMINI · " + (j.model || "flash") + " · " + (j.text || "(leeg)"));
+    } catch (ex) {
+      log("GEMINI FAIL · " + ex.message);
+      if(err) err.textContent = ex.message;
+    } finally {
+      if(btn) btn.disabled = false;
+    }
+  });
   document.querySelectorAll(".film").forEach(el=>el.addEventListener("click", ()=>{
     const f = FILMS.find(x=>x.id===el.dataset.id); if(!f) return;
     state.film = f; state.view = f.id==="daniel-volt"?"console":"board"; render();
@@ -209,6 +262,7 @@ function startRun(){
   log("RUN · DANIEL / VOLT");
   log("Engine lock · grok-imagine-video-1.5 · 15s · native audio");
   log("Shot-board 12 units · 08 IP skip");
+  pingHealth();
   tick();
 }
 
